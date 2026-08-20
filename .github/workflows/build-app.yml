@@ -1,0 +1,51 @@
+name: Build App Artifact
+
+# Builds an unsigned Debug .app on a macOS runner and uploads it as an artifact.
+# Intended for testing branches without a local Xcode installation.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ feat/gigaam-v3 ]
+
+jobs:
+  build-app:
+    name: Build unsigned FluidVoice.app
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+
+    - name: Build (unsigned)
+      run: |
+        set -o pipefail
+        xcodebuild \
+          -project Fluid.xcodeproj \
+          -scheme Fluid \
+          -configuration Debug \
+          -destination 'platform=macOS,arch=arm64' \
+          -derivedDataPath DerivedData \
+          build \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO
+
+    - name: Zip app bundle
+      run: |
+        APP_PATH="$(find DerivedData/Build/Products/Debug -maxdepth 1 -name '*.app' | head -1)"
+        test -n "$APP_PATH"
+        ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" FluidVoice-Debug.zip
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: FluidVoice-Debug
+        path: FluidVoice-Debug.zip
+        retention-days: 7
