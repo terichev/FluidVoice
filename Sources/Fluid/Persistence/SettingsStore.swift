@@ -4126,6 +4126,10 @@ final class SettingsStore: ObservableObject {
         case nemotronStreaming = "nemotron-3.5-streaming"
         case nemotronStreaming320 = "nemotron-3.5-streaming-320"
 
+        // MARK: - Sber GigaAM (local gigastt server)
+
+        case gigaamV3 = "gigaam-v3"
+
         // MARK: - Apple Native
 
         case appleSpeech = "apple-speech"
@@ -4156,6 +4160,7 @@ final class SettingsStore: ObservableObject {
             case .nemotronOffline: return "Nemotron 3.5 Multilingual"
             case .nemotronStreaming: return "Nemotron Speech 3.5 - Ultra Fast Low Latency"
             case .nemotronStreaming320: return "Nemotron Speech 3.5 - Ultra Fast Low Latency"
+            case .gigaamV3: return "GigaAM v3 (Russian)"
             case .appleSpeech: return "Apple ASR Legacy"
             case .appleSpeechAnalyzer: return "Apple Speech - macOS 26+"
             case .whisperTiny: return "Whisper Tiny"
@@ -4176,6 +4181,7 @@ final class SettingsStore: ObservableObject {
             case .qwen3Asr: return "30 Languages"
             case .cohereTranscribeSixBit: return "14 Languages (Select Manually)"
             case .nemotronOffline, .nemotronStreaming, .nemotronStreaming320: return "Around 40 Languages"
+            case .gigaamV3: return "Russian (Best Accuracy)"
             case .appleSpeech: return "System Languages"
             case .appleSpeechAnalyzer: return "EN, ES, FR, DE, IT, JA, KO, PT, ZH"
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
@@ -4193,6 +4199,7 @@ final class SettingsStore: ObservableObject {
             case .nemotronOffline: return "~530.8 MiB"
             case .nemotronStreaming: return "~668.2 MiB"
             case .nemotronStreaming320: return "~668.2 MiB"
+            case .gigaamV3: return "Managed by gigastt"
             case .appleSpeech: return "Built-in"
             case .appleSpeechAnalyzer: return "Built-in"
             case .whisperTiny: return "~43.9 MiB"
@@ -4213,6 +4220,7 @@ final class SettingsStore: ObservableObject {
             case .cohereTranscribeSixBit: return 1_650_748_785
             case .nemotronOffline: return 556_552_620
             case .nemotronStreaming, .nemotronStreaming320: return 700_685_415
+            case .gigaamV3: return 0 // Downloaded and cached by the gigastt server, not the app.
             case .whisperTiny: return 45_981_088
             case .whisperBase: return 84_962_880
             case .whisperSmall: return 269_751_136
@@ -4225,14 +4233,14 @@ final class SettingsStore: ObservableObject {
 
         var requiresAppleSilicon: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .nemotronOffline, .nemotronStreaming, .nemotronStreaming320: return true
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .nemotronOffline, .nemotronStreaming, .nemotronStreaming320, .gigaamV3: return true
             default: return false
             }
         }
 
         var isWhisperModel: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .nemotronOffline, .nemotronStreaming, .nemotronStreaming320, .appleSpeech, .appleSpeechAnalyzer: return false
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .nemotronOffline, .nemotronStreaming, .nemotronStreaming320, .gigaamV3, .appleSpeech, .appleSpeechAnalyzer: return false
             default: return true
             }
         }
@@ -4355,6 +4363,7 @@ final class SettingsStore: ObservableObject {
             case .nemotronOffline: return "Nemotron 3.5 Multilingual"
             case .nemotronStreaming: return "Nemotron Speech 3.5 - Ultra Fast Low Latency"
             case .nemotronStreaming320: return "Nemotron Speech 3.5 - Ultra Fast Low Latency"
+            case .gigaamV3: return "GigaAM v3 - Russian"
             case .appleSpeech: return "Apple ASR Legacy"
             case .appleSpeechAnalyzer: return "Apple Speech - macOS 26+"
             case .whisperTiny: return "Fast & Light"
@@ -4388,6 +4397,9 @@ final class SettingsStore: ObservableObject {
                 return "NVIDIA Nemotron 3.5 streaming-capable transcription. Supports 40 language-locales with auto or manual language selection."
             case .nemotronStreaming320:
                 return "NVIDIA Nemotron 3.5 streaming-capable transcription. Supports 40 language-locales with auto or manual language selection."
+            case .gigaamV3:
+                return "State-of-the-art Russian transcription by Sber with native punctuation. " +
+                    "Runs fully offline through the local gigastt engine (brew install gigastt)."
             case .appleSpeech:
                 return "Built-in macOS speech recognition. No model download required."
             case .appleSpeechAnalyzer:
@@ -4418,6 +4430,8 @@ final class SettingsStore: ObservableObject {
                 return 8.0
             case .nemotronOffline, .nemotronStreaming, .nemotronStreaming320:
                 return 8.0
+            case .gigaamV3:
+                return 4.0
             case .appleSpeech, .appleSpeechAnalyzer:
                 return 2.0 // Built-in, minimal overhead
             case .whisperTiny:
@@ -4461,6 +4475,7 @@ final class SettingsStore: ObservableObject {
             case .cohereTranscribeSixBit: return 3
             case .nemotronOffline: return 3
             case .nemotronStreaming, .nemotronStreaming320: return 4
+            case .gigaamV3: return 4
             case .appleSpeech: return 4
             case .appleSpeechAnalyzer: return 4
             case .whisperTiny: return 4
@@ -4482,6 +4497,7 @@ final class SettingsStore: ObservableObject {
             case .cohereTranscribeSixBit: return 5
             case .nemotronOffline: return 5
             case .nemotronStreaming, .nemotronStreaming320: return 4
+            case .gigaamV3: return 5
             case .appleSpeech: return 4
             case .appleSpeechAnalyzer: return 4
             case .whisperTiny: return 2
@@ -4503,6 +4519,7 @@ final class SettingsStore: ObservableObject {
             case .cohereTranscribeSixBit: return 0.85
             case .nemotronOffline: return 0.85
             case .nemotronStreaming, .nemotronStreaming320: return 1.0
+            case .gigaamV3: return 0.85
             case .appleSpeech: return 0.60
             case .appleSpeechAnalyzer: return 0.85
             case .whisperTiny: return 0.90
@@ -4524,6 +4541,7 @@ final class SettingsStore: ObservableObject {
             case .cohereTranscribeSixBit: return 0.98
             case .nemotronOffline: return 0.90
             case .nemotronStreaming, .nemotronStreaming320: return 0.85
+            case .gigaamV3: return 0.97
             case .appleSpeech: return 0.60
             case .appleSpeechAnalyzer: return 0.80
             case .whisperTiny: return 0.40
@@ -4544,6 +4562,7 @@ final class SettingsStore: ObservableObject {
             case .qwen3Asr: return "Beta"
             case .cohereTranscribeSixBit: return "New"
             case .nemotronOffline, .nemotronStreaming, .nemotronStreaming320: return "New + Beta"
+            case .gigaamV3: return "New"
             case .appleSpeechAnalyzer: return "New"
             default: return nil
             }
@@ -4552,7 +4571,7 @@ final class SettingsStore: ObservableObject {
         /// Optimization level for Apple Silicon (for display)
         var appleSiliconOptimized: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .nemotronOffline, .nemotronStreaming, .nemotronStreaming320, .appleSpeechAnalyzer:
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .nemotronOffline, .nemotronStreaming, .nemotronStreaming320, .gigaamV3, .appleSpeechAnalyzer:
                 return true
             default:
                 return false
@@ -4565,6 +4584,8 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .qwen3Asr, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return false // Too slow for real-time chunk processing
+            case .gigaamV3:
+                return false // Full-buffer HTTP round-trips per tick are too wasteful; final-only.
             default:
                 return true // All other models support streaming
             }
@@ -4620,6 +4641,7 @@ final class SettingsStore: ObservableObject {
             case openai = "OpenAI"
             case qwen = "Qwen"
             case cohere = "Cohere"
+            case sber = "Sber"
         }
 
         /// Which provider this model belongs to
@@ -4633,6 +4655,8 @@ final class SettingsStore: ObservableObject {
                 return .qwen
             case .cohereTranscribeSixBit:
                 return .cohere
+            case .gigaamV3:
+                return .sber
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return .openai
             }
@@ -4698,6 +4722,8 @@ final class SettingsStore: ObservableObject {
                 #else
                 return false
                 #endif
+            case .gigaamV3:
+                return GigaAMServerController.isInstalled
             default:
                 // Whisper models
                 guard let whisperFile = self.whisperModelFile else { return false }
@@ -4760,6 +4786,8 @@ final class SettingsStore: ObservableObject {
                 return "Qwen"
             case .cohereTranscribeSixBit:
                 return "Cohere"
+            case .gigaamV3:
+                return "Sber"
             case .appleSpeech, .appleSpeechAnalyzer:
                 return "Apple"
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
@@ -4784,6 +4812,8 @@ final class SettingsStore: ObservableObject {
                 return "#E67E22"
             case .cohereTranscribeSixBit:
                 return "#FA6B3C"
+            case .gigaamV3:
+                return "#21A038" // Sber green
             case .appleSpeech, .appleSpeechAnalyzer:
                 return "#A2AAAD" // Apple Gray
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:

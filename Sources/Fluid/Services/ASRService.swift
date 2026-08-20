@@ -251,6 +251,7 @@ final class ASRService: ObservableObject {
     private var parakeetRealtimeProvider: ParakeetRealtimeProvider?
     private var externalCoreMLProvider: ExternalCoreMLTranscriptionProvider?
     private var nemotronProviders: [NemotronProvider.Mode: NemotronProvider] = [:]
+    private var gigaamProvider: GigaAMProvider?
     private var whisperProvider: WhisperProvider?
     private var appleSpeechProvider: AppleSpeechProvider?
     /// Stored as Any? because @available cannot be applied to stored properties
@@ -326,6 +327,7 @@ final class ASRService: ObservableObject {
         self.parakeetRealtimeProvider = nil
         self.externalCoreMLProvider = nil
         self.nemotronProviders.removeAll()
+        self.gigaamProvider = nil
         self.whisperProvider = nil
         self.appleSpeechProvider = nil
         self._appleSpeechAnalyzerProvider = nil
@@ -357,6 +359,8 @@ final class ASRService: ObservableObject {
             return self.getExternalCoreMLProvider()
         case .nemotronOffline, .nemotronStreaming, .nemotronStreaming320:
             return self.getNemotronProvider(mode: model.nemotronProviderMode)
+        case .gigaamV3:
+            return self.getGigaAMProvider()
         case .qwen3Asr:
             return self.getFluidAudioProvider()
         default:
@@ -404,6 +408,16 @@ final class ASRService: ObservableObject {
         let provider = NemotronProvider(mode: mode)
         self.nemotronProviders[mode] = provider
         DebugLogger.shared.info("ASRService: Created \(provider.name) provider", source: "ASRService")
+        return provider
+    }
+
+    private func getGigaAMProvider() -> GigaAMProvider {
+        if let existing = gigaamProvider {
+            return existing
+        }
+        let provider = GigaAMProvider()
+        self.gigaamProvider = provider
+        DebugLogger.shared.info("ASRService: Created GigaAM provider", source: "ASRService")
         return provider
     }
 
@@ -558,6 +572,8 @@ final class ASRService: ObservableObject {
             return ExternalCoreMLTranscriptionProvider(modelOverride: model)
         case .nemotronOffline, .nemotronStreaming, .nemotronStreaming320:
             return NemotronProvider(mode: model.nemotronProviderMode)
+        case .gigaamV3:
+            return GigaAMProvider()
         case .qwen3Asr:
             // Qwen support removed; route legacy requests to Parakeet v3.
             return FluidAudioProvider(modelOverride: .parakeetTDT, configureWordBoosting: false)
@@ -677,6 +693,7 @@ final class ASRService: ObservableObject {
         self.fluidAudioProvider = nil
         self.parakeetRealtimeProvider = nil
         self.externalCoreMLProvider = nil
+        self.gigaamProvider = nil
         self.whisperProvider = nil
         self.appleSpeechProvider = nil
         self._appleSpeechAnalyzerProvider = nil

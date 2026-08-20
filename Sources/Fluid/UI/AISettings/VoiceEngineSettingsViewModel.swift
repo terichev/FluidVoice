@@ -95,6 +95,8 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
             models = models.filter { $0.provider == .cohere }
         case .openai:
             models = models.filter { $0.provider == .openai }
+        case .sber:
+            models = models.filter { $0.provider == .sber }
         }
 
         if self.englishOnlyFilter {
@@ -226,6 +228,8 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
             return "Nemotron 3.5 Multilingual is slower but more accurate. Supports around 40 languages with auto or manual language selection. Best on Apple Silicon with 8GB+ RAM."
         case .nemotronStreaming, .nemotronStreaming320:
             return "Nemotron Speech 3.5 Streaming Capable uses NVIDIA's streaming CoreML pipeline. Supports around 40 languages with auto or manual language selection."
+        case .gigaamV3:
+            return "GigaAM v3 is Sber's state-of-the-art Russian model with native punctuation. FluidVoice runs it through the local gigastt engine — install it once with 'brew install gigastt' and everything stays on your Mac."
         default:
             return "Whisper models support 99 languages and work on any Mac."
         }

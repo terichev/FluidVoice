@@ -2463,6 +2463,8 @@ struct OnboardingFlowView: View {
             return "Nemotron Streaming"
         case .nemotronOffline:
             return "Nemotron Offline"
+        case .gigaamV3:
+            return "GigaAM v3"
         case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLarge:
             return "Whisper"
         default:

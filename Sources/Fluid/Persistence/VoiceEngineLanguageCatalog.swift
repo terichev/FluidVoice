@@ -140,6 +140,10 @@ enum VoiceEngineLanguageCatalog {
             routes.append(Self.route(language, .parakeetTDT, .automatic))
         }
 
+        if language.id == "ru" {
+            routes.append(Self.route(language, .gigaamV3, .automatic))
+        }
+
         if let cohereLanguage = Self.cohereLanguage(for: language.id) {
             routes.append(Self.route(language, .cohereTranscribeSixBit, .cohere(cohereLanguage)))
         }
