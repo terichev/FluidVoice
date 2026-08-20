@@ -1,4 +1,13 @@
-# FluidVoice
+# FluidVoice + GigaAM v3 (Russian)
+
+> [!TIP]
+> **This fork adds [GigaAM v3](https://huggingface.co/ai-sage/GigaAM-v3)** — Sber's open model that is the state of the art for Russian speech recognition (~3x lower WER than Whisper-large-v3 on Russian, with native punctuation and number normalization). Fully offline via the local [gigastt](https://github.com/ekhodzitsky/gigastt) engine.
+>
+> **Этот форк добавляет GigaAM v3** — лучшую открытую модель распознавания русской речи, с нативной пунктуацией. Полностью оффлайн.
+>
+> Why this model: [docs/WHY_GIGAAM_V3.md](docs/WHY_GIGAAM_V3.md) · Install & updates (RU): [docs/GIGAAM_V3_SETUP.md](docs/GIGAAM_V3_SETUP.md) · Ready-made build: [Releases](https://github.com/terichev/FluidVoice/releases)
+>
+> Everything below is the upstream [altic-dev/FluidVoice](https://github.com/altic-dev/FluidVoice) README.
 
 <p align="center">
   <a href="https://github.com/altic-dev/FluidVoice/stargazers"><img src="https://img.shields.io/github/stars/altic-dev/FluidVoice?style=social" alt="GitHub stars"/></a>
