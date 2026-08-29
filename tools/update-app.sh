@@ -65,6 +65,12 @@ codesign --verify --deep --strict "$APP_SRC"
 pkill -f "FluidVoice Debug" 2>/dev/null || true
 rm -rf "$APP_PATH"
 ditto "$APP_SRC" "$APP_PATH"
+
+# TCC pins Accessibility to the ad-hoc signature hash, so the previous grant
+# turns into a stale row that shows as enabled yet silently denies the new
+# binary. Clear it so the app prompts fresh on first use.
+tccutil reset Accessibility com.FluidApp.app.debug > /dev/null 2>&1 || true
+
 echo "Installed: $APP_PATH"
-echo "Reminder: re-grant Accessibility for the new build (ad-hoc signature changed)."
+echo "Re-grant Accessibility when the app asks (the previous grant was cleared on purpose)."
 open "$APP_PATH"
