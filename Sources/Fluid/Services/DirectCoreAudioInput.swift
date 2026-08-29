@@ -751,8 +751,17 @@ final nonisolated class DirectCoreAudioLifecycleController: @unchecked Sendable 
                 switch selection {
                 case .systemDefault:
                     device = AudioDevice.getDefaultInputDevice()
+                        .flatMap { AudioDevice.isInputDeviceUsable($0) ? $0 : nil }
                 case let .preferredUID(uid):
-                    device = AudioDevice.getInputDevice(byUID: uid)
+                    if let preferredDevice = AudioDevice.getInputDevice(byUID: uid),
+                       AudioDevice.isInputDeviceUsable(preferredDevice)
+                    {
+                        device = preferredDevice
+                    } else {
+                        // Let ASRService retry the next app-priority device. Falling back
+                        // here would silently bypass the user's order during a HAL race.
+                        device = nil
+                    }
                 }
                 guard let device else {
                     continuation.resume(
@@ -834,6 +843,29 @@ final nonisolated class DirectCoreAudioLifecycleController: @unchecked Sendable 
 
                     guard let validatedInput = self.input else {
                         throw Self.error("Direct Core Audio input disappeared before start.")
+                    }
+                    if validatedInput.isRunning {
+                        let runningFingerprint = try self.fingerprintReader(deviceID)
+                        guard runningFingerprint == validatedInput.formatFingerprint,
+                              validatedInput.openPacketGateIfClean()
+                        else {
+                            throw Self.error(
+                                "Direct Core Audio format changed while reusing running input generation " +
+                                    "\(self.generation)."
+                            )
+                        }
+                        self.publishSnapshot(
+                            phase: .running,
+                            input: validatedInput,
+                            fingerprint: validatedInput.formatFingerprint
+                        )
+                        Self.log(
+                            "Direct capture start reused running input generation=\(self.generation) " +
+                                "device='\(deviceName)'",
+                            level: .debug
+                        )
+                        continuation.resume(returning: self.snapshot)
+                        return
                     }
                     self.publishSnapshot(
                         phase: .starting,
