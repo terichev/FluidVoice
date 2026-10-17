@@ -6,7 +6,9 @@ This branch adds a local FluidVoice speech engine for [coriollon's Whisper Russi
 
 FluidVoice needs a **transcribe.cpp GGUF**. The source `model.safetensors` cannot be selected directly. The source is pinned to Hugging Face revision `bf64d2a976a268e35041f74233f889f951f0f676`; `model.safetensors` must be **3,235,581,408 bytes** and have SHA-256 `4b1891beb4efbdf22605046229acbc060d873c8fc32f3ec6e2e1c0ac64651056`.
 
-Transfer `model.safetensors` from the other computer to this Mac first. Install Python 3.10 or newer, CMake, and a C++ compiler, then run from a working directory with at least 10 GB free. The command below downloads only small configuration and tokenizer files, **not** the 3.24 GB weights again:
+The pinned [CI conversion artifact](https://github.com/terichev/FluidVoice/actions/runs/39050575686/artifacts/12108030497) contains a ready Q8_0 GGUF. Its verified size is **886,381,856 bytes** and SHA-256 is `a12631be9408e83ca5145bdf577cc2243ed8960a907f74e1866f9078abbb2541`. It was loaded successfully by FluidVoice's bundled CTranscribe runtime and by the installed app on Metal. GitHub Actions artifacts expire, so use the reproducible conversion steps below if the link is no longer available.
+
+To convert the Safetensors source yourself, transfer `model.safetensors` to this Mac first. Install Python 3.10 or newer, CMake, and a C++ compiler, then run from a working directory with at least 10 GB free. The command below downloads only small configuration and tokenizer files, **not** the 3.24 GB weights again:
 
 ```bash
 python3 -m venv .venv-codeswitch
@@ -39,7 +41,7 @@ cmake --build transcribe.cpp/build --target transcribe-quantize -j 8
 transcribe.cpp/build/bin/transcribe-quantize codeswitch-F32.gguf codeswitch-Q8_0.gguf --quant Q8_0
 ```
 
-The converter comes from pinned transcribe.cpp commit `33d5c383e43e6acbd572845866ea75b8c7959fa5`, including `scripts/lib`. Its required source files are `config.json`, `generation_config.json`, `preprocessor_config.json`, `tokenizer.json`, and `model.safetensors` in one directory. It writes an F32 GGUF first; the last command makes the smaller Q8_0 GGUF. The v0.1.2 quantizer syntax above is verified from its source, but conversion and quantization have **not yet been run end to end for this fine-tune**. Confirm that the Q8_0 file loads in transcribe.cpp before installing it. If either command fails, do not relabel the Safetensors file as GGUF.
+The converter comes from pinned transcribe.cpp commit `33d5c383e43e6acbd572845866ea75b8c7959fa5`, including `scripts/lib`. Its required source files are `config.json`, `generation_config.json`, `preprocessor_config.json`, `tokenizer.json`, and `model.safetensors` in one directory. It writes an F32 GGUF first; the last command makes the smaller Q8_0 GGUF. The [model conversion workflow](https://github.com/terichev/FluidVoice/actions/runs/39050575686) completed this conversion for the pinned source. Verify the checksum and confirm that a locally converted Q8_0 file loads in transcribe.cpp before installing it. If either command fails, do not relabel the Safetensors file as GGUF.
 
 ## Install in FluidVoice
 
