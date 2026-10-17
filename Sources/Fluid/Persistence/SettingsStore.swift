@@ -5120,6 +5120,7 @@ final class SettingsStore: ObservableObject {
         case whisperMedium = "whisper-medium"
         case whisperLargeTurbo = "whisper-large-turbo"
         case whisperLarge = "whisper-large"
+        case whisperRussianCodeSwitch = "whisper-russian-codeswitch"
 
         var parakeetDescriptor: ParakeetSpeechModelCatalog.Descriptor? {
             ParakeetSpeechModelCatalog.descriptor(forModelID: self.rawValue)
@@ -5154,6 +5155,7 @@ final class SettingsStore: ObservableObject {
             case .whisperMedium: return "Whisper Medium"
             case .whisperLargeTurbo: return "Whisper Large Turbo"
             case .whisperLarge: return "Whisper Large"
+            case .whisperRussianCodeSwitch: return "Whisper Russian Code-Switch"
             }
         }
 
@@ -5168,6 +5170,7 @@ final class SettingsStore: ObservableObject {
             case .appleSpeechAnalyzer: return "EN, ES, FR, DE, IT, JA, KO, PT, ZH"
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return "99 Languages"
+            case .whisperRussianCodeSwitch: return "Russian + English IT terms"
             }
         }
 
@@ -5188,6 +5191,7 @@ final class SettingsStore: ObservableObject {
             case .whisperMedium: return "~793.0 MiB"
             case .whisperLargeTurbo: return "~845.3 MiB"
             case .whisperLarge: return "~1.55 GiB"
+            case .whisperRussianCodeSwitch: return "Local GGUF (manual install)"
             }
         }
 
@@ -5205,6 +5209,7 @@ final class SettingsStore: ObservableObject {
             case .whisperMedium: return 831_538_144
             case .whisperLargeTurbo: return 886_381_760
             case .whisperLarge: return 1_668_741_440
+            case .whisperRussianCodeSwitch: return 0 // Local model; size is verified during installation.
             case .appleSpeech, .appleSpeechAnalyzer: return 0
             }
         }
@@ -5233,6 +5238,7 @@ final class SettingsStore: ObservableObject {
             case .whisperMedium: return "whisper-medium-Q8_0.gguf"
             case .whisperLargeTurbo: return "whisper-large-v3-turbo-Q8_0.gguf"
             case .whisperLarge: return "whisper-large-v3-Q8_0.gguf"
+            case .whisperRussianCodeSwitch: return RussianCodeSwitchWhisper.fileName
             default: return nil
             }
         }
@@ -5267,6 +5273,7 @@ final class SettingsStore: ObservableObject {
             case .whisperMedium: return "medium"
             case .whisperLargeTurbo: return "large-v3-turbo"
             case .whisperLarge: return "large-v3"
+            case .whisperRussianCodeSwitch: return "large-v3-turbo"
             default: return nil
             }
         }
@@ -5292,7 +5299,7 @@ final class SettingsStore: ObservableObject {
         /// Returns models available for the current Mac's architecture and OS
         static var availableModels: [SpeechModel] {
             allCases.filter { model in
-                if model == .whisperLargeTurbo, !CPUArchitecture.isAppleSilicon {
+                if model == .whisperLargeTurbo || model == .whisperRussianCodeSwitch, !CPUArchitecture.isAppleSilicon {
                     return false
                 }
                 if model == .whisperLarge, !CPUArchitecture.isAppleSilicon {
@@ -5349,6 +5356,7 @@ final class SettingsStore: ObservableObject {
             case .whisperMedium: return "Medium Quality"
             case .whisperLargeTurbo: return "Higher Quality but Faster"
             case .whisperLarge: return "Maximum Accuracy"
+            case .whisperRussianCodeSwitch: return "Russian speech with English tech terms"
             }
         }
 
@@ -5385,6 +5393,8 @@ final class SettingsStore: ObservableObject {
                 return "Near-maximum accuracy with optimized speed."
             case .whisperLarge:
                 return "Best possible accuracy. Large download and memory usage."
+            case .whisperRussianCodeSwitch:
+                return "Russian dictation with English IT terms. Install a converted GGUF file manually."
             }
         }
 
@@ -5411,6 +5421,8 @@ final class SettingsStore: ObservableObject {
                 return 5.0
             case .whisperLargeTurbo:
                 return 6.0
+            case .whisperRussianCodeSwitch:
+                return 6.0
             case .whisperLarge:
                 return 8.0
             }
@@ -5423,7 +5435,7 @@ final class SettingsStore: ObservableObject {
                 return "⚠️ Requires 8GB+ RAM. Best on newer Apple Silicon Macs."
             case .whisperLarge:
                 return "⚠️ Requires 10GB+ RAM. May crash on systems with limited memory."
-            case .whisperLargeTurbo:
+            case .whisperLargeTurbo, .whisperRussianCodeSwitch:
                 return "⚠️ Requires 8GB+ RAM. May be unstable on some systems."
             case .whisperMedium:
                 return "Requires 6GB+ RAM for stable operation."
@@ -5448,6 +5460,7 @@ final class SettingsStore: ObservableObject {
             case .whisperSmall: return 3
             case .whisperMedium: return 2
             case .whisperLargeTurbo: return 3
+            case .whisperRussianCodeSwitch: return 3
             case .whisperLarge: return 1
             }
         }
@@ -5468,6 +5481,7 @@ final class SettingsStore: ObservableObject {
             case .whisperSmall: return 4
             case .whisperMedium: return 4
             case .whisperLargeTurbo: return 5
+            case .whisperRussianCodeSwitch: return 5
             case .whisperLarge: return 5
             }
         }
@@ -5488,6 +5502,7 @@ final class SettingsStore: ObservableObject {
             case .whisperSmall: return 0.60
             case .whisperMedium: return 0.40
             case .whisperLargeTurbo: return 0.65
+            case .whisperRussianCodeSwitch: return 0.65
             case .whisperLarge: return 0.20
             }
         }
@@ -5508,6 +5523,7 @@ final class SettingsStore: ObservableObject {
             case .whisperSmall: return 0.70
             case .whisperMedium: return 0.80
             case .whisperLargeTurbo: return 0.95
+            case .whisperRussianCodeSwitch: return 0.95
             case .whisperLarge: return 1.00
             }
         }
@@ -5541,7 +5557,7 @@ final class SettingsStore: ObservableObject {
         /// Large Whisper models are too slow for streaming, so they only do final transcription on stop.
         var supportsStreaming: Bool {
             switch self {
-            case .qwen3Asr, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
+            case .qwen3Asr, .whisperMedium, .whisperLargeTurbo, .whisperLarge, .whisperRussianCodeSwitch:
                 return false // Too slow for real-time chunk processing
             default:
                 return true // All other models support streaming
@@ -5611,7 +5627,7 @@ final class SettingsStore: ObservableObject {
                 return .qwen
             case .cohereTranscribeSixBit:
                 return .cohere
-            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
+            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge, .whisperRussianCodeSwitch:
                 return .openai
             }
         }
@@ -5677,6 +5693,9 @@ final class SettingsStore: ObservableObject {
                 let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
                     .appendingPathComponent("WhisperModels")
                 let modelURL = directory?.appendingPathComponent(whisperFile)
+                if self == .whisperRussianCodeSwitch {
+                    return modelURL.map(RussianCodeSwitchWhisper.isInstalled) ?? false
+                }
                 guard
                     let modelURL,
                     let attributes = try? FileManager.default.attributesOfItem(atPath: modelURL.path),
@@ -5712,7 +5731,7 @@ final class SettingsStore: ObservableObject {
         }
         #endif
 
-        /// Brand/provider name for the model (NVIDIA, Apple, OpenAI)
+        /// Brand/provider name for the model.
         var brandName: String {
             switch self {
             case .fluidParakeetMini, .fluidParakeetPico:
@@ -5727,6 +5746,8 @@ final class SettingsStore: ObservableObject {
                 return "Apple"
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return "OpenAI"
+            case .whisperRussianCodeSwitch:
+                return "coriollon"
             }
         }
 
@@ -5753,6 +5774,8 @@ final class SettingsStore: ObservableObject {
                 return "#A2AAAD" // Apple Gray
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return "#10A37F" // OpenAI Teal
+            case .whisperRussianCodeSwitch:
+                return "#7B61A8" // Community model
             }
         }
     }
@@ -6296,7 +6319,7 @@ extension SettingsStore {
                 if model == .nemotronStreaming320 {
                     return .nemotronStreaming
                 }
-                let requiresAppleSiliconWhisper = model == .whisperLargeTurbo || model == .whisperLarge
+                let requiresAppleSiliconWhisper = model == .whisperLargeTurbo || model == .whisperLarge || model == .whisperRussianCodeSwitch
                 if requiresAppleSiliconWhisper, !CPUArchitecture.isAppleSilicon {
                     return .whisperBase
                 }

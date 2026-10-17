@@ -480,14 +480,18 @@ extension VoiceEngineSettingsView {
                         .allowsHitTesting(isSelected)
                         .accessibilityHidden(!isSelected)
                     } else {
-                        Text("Not downloaded")
+                        Text(model == .whisperRussianCodeSwitch ? "Not installed" : "Not downloaded")
                             .font(self.theme.typography.bodySmall)
                             .foregroundStyle(self.voiceEngineTertiaryText)
                             .opacity(isSelected ? 0 : 1)
 
-                        Button("Download") {
-                            self.viewModel.previewSpeechModel = model
-                            self.viewModel.downloadSpeechModel(model)
+                        Button(model == .whisperRussianCodeSwitch ? "Install instructions" : "Download") {
+                            if model == .whisperRussianCodeSwitch {
+                                self.viewModel.showRussianCodeSwitchInstallation()
+                            } else {
+                                self.viewModel.previewSpeechModel = model
+                                self.viewModel.downloadSpeechModel(model)
+                            }
                         }
                         .fluidGlassAction(prominent: true)
                         .disabled(self.viewModel.areSpeechModelActionsBlocked)

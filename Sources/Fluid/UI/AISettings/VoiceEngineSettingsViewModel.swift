@@ -127,6 +127,9 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
         guard !self.areSpeechModelActionsBlocked else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             self.settings.selectedSpeechModel = model
+            if model == .whisperRussianCodeSwitch, self.settings.selectedWhisperLanguageCode == nil {
+                self.settings.selectedWhisperLanguageCode = "ru"
+            }
             self.previewSpeechModel = model
             self.setSelectedSpeechProvider(model.provider)
         }
@@ -165,6 +168,16 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
                 self.asr.showError = true
             }
         }
+    }
+
+    func showRussianCodeSwitchInstallation() {
+        self.installations.refresh()
+        guard let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let url = cache.appendingPathComponent("WhisperModels", isDirectory: true)
+            .appendingPathComponent(RussianCodeSwitchWhisper.fileName)
+        self.asr.errorTitle = "Manual Model Installation"
+        self.asr.errorMessage = RussianCodeSwitchWhisper.installationError(at: url).localizedDescription
+        self.asr.showError = true
     }
 
     func cancelSpeechModelDownload() {
@@ -222,6 +235,8 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
             return "Nemotron 3.5 Multilingual is slower but more accurate. Supports around 40 languages with auto or manual language selection. Best on Apple Silicon with 8GB+ RAM."
         case .nemotronStreaming, .nemotronStreaming320:
             return "Nemotron Speech 3.5 Streaming Capable uses NVIDIA's streaming CoreML pipeline. Supports around 40 languages with auto or manual language selection."
+        case .whisperRussianCodeSwitch:
+            return "Russian dictation with English IT terms. Install a converted GGUF manually before activating; Russian is the default language."
         default:
             return "Whisper models support 99 languages and work on any Mac."
         }

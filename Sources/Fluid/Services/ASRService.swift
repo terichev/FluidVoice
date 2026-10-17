@@ -7449,10 +7449,27 @@ final class ASRService: ObservableObject {
         guard SettingsStore.shared.removeFillerWordsEnabled else { return text }
 
         let fillers = Set(SettingsStore.shared.fillerWords.map { $0.lowercased() })
+        return Self.removingFillers(
+            text,
+            configuredFillers: fillers,
+            includesRussianSounds: SettingsStore.shared.selectedSpeechModel == .whisperRussianCodeSwitch
+        )
+    }
 
+    static func removingFillers(
+        _ text: String,
+        configuredFillers: Set<String>,
+        includesRussianSounds: Bool
+    ) -> String {
+        let russianSounds: Set<String> = ["э", "ээ", "эээ", "эм", "ммм", "э-э", "э-э-э"]
         let words = text.split(separator: " ", omittingEmptySubsequences: true)
         let filtered = words.filter { word in
-            !fillers.contains(word.lowercased().trimmingCharacters(in: .punctuationCharacters))
+            let normalized = word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            let normalizedRussian = normalized
+                .replacingOccurrences(of: "‑", with: "-")
+                .replacingOccurrences(of: "—", with: "-")
+            return !configuredFillers.contains(normalized)
+                && !(includesRussianSounds && russianSounds.contains(normalizedRussian))
         }
 
         return filtered.joined(separator: " ")

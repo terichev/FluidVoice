@@ -1,0 +1,80 @@
+name: Russian Code-Switch Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/russian-codeswitch]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/feat/russian-codeswitch'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build ad hoc signed Release archive
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project Fluid.xcodeproj \
+            -scheme Fluid \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/FluidVoice.xcarchive" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=""
+
+      - name: Repair framework layout, sign, and package app
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/FluidVoice.xcarchive/Products/Applications/FluidVoice.app"
+          test -d "$app"
+          test -x "$app/Contents/MacOS/FluidVoice"
+          entitlements="$RUNNER_TEMP/FluidVoice.entitlements"
+          codesign -d --entitlements - --xml "$app" > "$entitlements" 2>/dev/null
+          plutil -lint "$entitlements"
+
+          framework="$app/Contents/Frameworks/CTranscribe.framework"
+          test -d "$framework/Versions/A"
+          rm -rf "$framework/Versions/Current" "$framework/CTranscribe" \
+            "$framework/Resources" "$framework/Versions/A/_CodeSignature"
+          ln -s A "$framework/Versions/Current"
+          ln -s Versions/Current/CTranscribe "$framework/CTranscribe"
+          ln -s Versions/Current/Resources "$framework/Resources"
+
+          codesign --force --sign - --timestamp=none "$framework"
+          codesign --force --sign - --timestamp=none \
+            "$app/Contents/Frameworks/MediaRemoteAdapter.framework"
+          codesign --force --sign - --timestamp=none --options runtime \
+            --entitlements "$entitlements" --identifier com.FluidApp.app "$app"
+          codesign --verify --deep --strict "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.FluidApp.app
+
+          ditto -c -k --keepParent --sequesterRsrc "$app" "$RUNNER_TEMP/FluidVoice-CodeSwitch.app.zip"
+          shasum -a 256 "$RUNNER_TEMP/FluidVoice-CodeSwitch.app.zip" > "$RUNNER_TEMP/FluidVoice-CodeSwitch.app.zip.sha256"
+          ditto -x -k "$RUNNER_TEMP/FluidVoice-CodeSwitch.app.zip" "$RUNNER_TEMP/verify"
+          codesign --verify --deep --strict "$RUNNER_TEMP/verify/FluidVoice.app"
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: FluidVoice-CodeSwitch-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/FluidVoice-CodeSwitch.app.zip
+            ${{ runner.temp }}/FluidVoice-CodeSwitch.app.zip.sha256
+          if-no-files-found: error

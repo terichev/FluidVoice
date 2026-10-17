@@ -21,6 +21,7 @@ final class SpeechModelInstallationSnapshot: ObservableObject {
             case cohere(ExternalCoreMLASRModelSpec, storedPath: String?)
             case nemotron(folder: String)
             case whisper(file: String, expectedBytes: Int64)
+            case localWhisper(file: String)
             case unavailable
         }
 
@@ -163,6 +164,8 @@ final class SpeechModelInstallationSnapshot: ObservableObject {
                 kind = .parakeet(descriptor)
             } else if let spec = model.externalCoreMLSpec {
                 kind = .cohere(spec, storedPath: SettingsStore.shared.storedExternalCoreMLArtifactsPath(for: model))
+            } else if model == .whisperRussianCodeSwitch, let file = model.whisperModelFile {
+                kind = .localWhisper(file: file)
             } else if let file = model.whisperModelFile {
                 kind = .whisper(file: file, expectedBytes: model.expectedDownloadBytes)
             } else {
@@ -248,6 +251,9 @@ final class SpeechModelInstallationSnapshot: ObservableObject {
                 let url = caches?.appendingPathComponent("WhisperModels", isDirectory: true).appendingPathComponent(file)
                 let attributes = url.flatMap { try? fm.attributesOfItem(atPath: $0.path) }
                 exists = expectedBytes > 0 && (attributes?[.size] as? NSNumber)?.int64Value == expectedBytes
+            case let .localWhisper(file):
+                let url = caches?.appendingPathComponent("WhisperModels", isDirectory: true).appendingPathComponent(file)
+                exists = url.map(RussianCodeSwitchWhisper.isInstalled) ?? false
             case .unavailable:
                 exists = false
             }

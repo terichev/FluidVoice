@@ -11,6 +11,17 @@ import XCTest
 
 @MainActor
 final class DictationE2ETests: XCTestCase {
+    func testRussianCodeSwitchFillerCleanupKeepsMeaningfulWordsAndITTerms() {
+        let spoken = "Э-э-э, поставь эм Docker, ммм и э Node.js, но вот эту ээ версию ну оставь."
+        let cleaned = ASRService.removingFillers(spoken, configuredFillers: [], includesRussianSounds: true)
+        XCTAssertEqual(cleaned, "поставь Docker, и Node.js, но вот эту версию ну оставь.")
+        XCTAssertEqual(
+            ASRService.removingFillers("эмбеддинг и вот", configuredFillers: [], includesRussianSounds: true),
+            "эмбеддинг и вот"
+        )
+        XCTAssertEqual(ASRService.removingFillers(spoken, configuredFillers: [], includesRussianSounds: false), spoken)
+    }
+
     // Pronunciation features are opt-in in the app; these tests exercise the enabled paths.
     private var priorSharedFeaturesFlag: Any?
 

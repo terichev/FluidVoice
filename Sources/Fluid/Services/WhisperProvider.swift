@@ -1,6 +1,30 @@
 import Foundation
 import TranscribeCpp
 
+/// A manually installed transcribe.cpp GGUF converted from the Russian Code-Switch model.
+enum RussianCodeSwitchWhisper {
+    static let fileName = "whisper-russian-codeswitch.gguf"
+    static let minimumBytes = 100_000_000
+
+    static func isInstalled(_ url: URL) -> Bool {
+        guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+              values.isRegularFile == true,
+              (values.fileSize ?? 0) > Self.minimumBytes,
+              let handle = try? FileHandle(forReadingFrom: url)
+        else { return false }
+        defer { handle.closeFile() }
+        return handle.readData(ofLength: 4) == Data("GGUF".utf8)
+    }
+
+    static func installationError(at url: URL) -> NSError {
+        NSError(
+            domain: "WhisperProvider",
+            code: -8,
+            userInfo: [NSLocalizedDescriptionKey: "Whisper Russian Code-Switch needs a converted GGUF model at \(url.path). Run scripts/install_russian_codeswitch_model.sh with a verified GGUF path and SHA-256 checksum, then reopen Voice Engine settings."]
+        )
+    }
+}
+
 /// TranscriptionProvider implementation using transcribe.cpp for Whisper GGUF models.
 final class WhisperProvider: TranscriptionProvider {
     let name = "Whisper (Universal)"
@@ -51,6 +75,10 @@ final class WhisperProvider: TranscriptionProvider {
         return self.ready
     }
 
+    var shouldClearCacheAfterCancellation: Bool {
+        self.selectedModel != .whisperRussianCodeSwitch
+    }
+
     private var selectedModel: SettingsStore.SpeechModel {
         self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
     }
@@ -82,6 +110,7 @@ final class WhisperProvider: TranscriptionProvider {
     }
 
     private var modelDownloadURL: URL? {
+        guard self.selectedModel != .whisperRussianCodeSwitch else { return nil }
         let modelName = self.modelName
         let suffix = "-Q8_0.gguf"
         guard modelName.hasSuffix(suffix) else { return nil }
@@ -145,6 +174,9 @@ final class WhisperProvider: TranscriptionProvider {
         else {
             return false
         }
+        if targetModel == .whisperRussianCodeSwitch {
+            return RussianCodeSwitchWhisper.isInstalled(url)
+        }
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
               let size = attributes[.size] as? NSNumber
@@ -171,12 +203,19 @@ final class WhisperProvider: TranscriptionProvider {
 
         guard !self.isReady else { return }
 
+        if targetModel == .whisperRussianCodeSwitch,
+           !self.isModelFileValid(at: self.modelURL, for: targetModel)
+        {
+            throw RussianCodeSwitchWhisper.installationError(at: self.modelURL)
+        }
+
         try Self.backendInitialization.get()
         try self.validateBackendAvailability(for: targetModel)
 
         try FileManager.default.createDirectory(at: self.modelDirectory, withIntermediateDirectories: true)
 
-        if FileManager.default.fileExists(atPath: self.modelURL.path),
+        if targetModel != .whisperRussianCodeSwitch,
+           FileManager.default.fileExists(atPath: self.modelURL.path),
            !self.isModelFileValid(at: self.modelURL, for: targetModel)
         {
             DebugLogger.shared.warning(
@@ -186,7 +225,9 @@ final class WhisperProvider: TranscriptionProvider {
             try? FileManager.default.removeItem(at: self.modelURL)
         }
 
-        if !FileManager.default.fileExists(atPath: self.modelURL.path) {
+        if targetModel != .whisperRussianCodeSwitch,
+           !FileManager.default.fileExists(atPath: self.modelURL.path)
+        {
             DebugLogger.shared.info("WhisperProvider: Downloading Whisper GGUF model...", source: "WhisperProvider")
             progressHandler?(.preparingDownload)
             try await self.downloadModel { progress in
@@ -195,6 +236,9 @@ final class WhisperProvider: TranscriptionProvider {
         }
 
         guard self.isModelFileValid(at: self.modelURL, for: targetModel) else {
+            if targetModel == .whisperRussianCodeSwitch {
+                throw RussianCodeSwitchWhisper.installationError(at: self.modelURL)
+            }
             try? FileManager.default.removeItem(at: self.modelURL)
             throw NSError(
                 domain: "WhisperProvider",
@@ -323,6 +367,7 @@ final class WhisperProvider: TranscriptionProvider {
         let resolvedLanguageCode = languageCode
             ?? self.languageCodeOverride
             ?? SettingsStore.shared.selectedWhisperLanguageCode
+            ?? (self.selectedModel == .whisperRussianCodeSwitch ? "ru" : nil)
         let transcript = try await session.run(
             samples,
             options: Self.runOptions(languageCode: resolvedLanguageCode)

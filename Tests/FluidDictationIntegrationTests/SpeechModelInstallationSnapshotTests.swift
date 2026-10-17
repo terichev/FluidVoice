@@ -49,6 +49,53 @@ private final nonisolated class CatalogTestClock: @unchecked Sendable {
 
 @MainActor
 final class SpeechModelInstallationSnapshotTests: XCTestCase {
+    func testLocalRussianCodeSwitchRequiresGGUFHeaderAndNeverUsesDownloadSize() async throws {
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = cache.appendingPathComponent("WhisperModels", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: cache) }
+
+        let model = SettingsStore.SpeechModel.whisperRussianCodeSwitch
+        XCTAssertTrue(model.isWhisperModel)
+        XCTAssertFalse(model.supportsStreaming)
+        XCTAssertEqual(model.whisperModelFile, RussianCodeSwitchWhisper.fileName)
+        XCTAssertEqual(model.expectedDownloadBytes, 0)
+
+        let probe = SpeechModelInstallationSnapshot.Probe(modelID: model.id, kind: .localWhisper(file: RussianCodeSwitchWhisper.fileName))
+        let modelURL = directory.appendingPathComponent(RussianCodeSwitchWhisper.fileName)
+        let beforeInstall = try await SpeechModelInstallationSnapshot.scan([probe], cachesDirectory: cache)
+        XCTAssertFalse(beforeInstall.contains(model.id))
+
+        try Data("NOPE".utf8).write(to: modelURL)
+        let invalidHandle = try FileHandle(forWritingTo: modelURL)
+        invalidHandle.truncateFile(atOffset: UInt64(RussianCodeSwitchWhisper.minimumBytes + 1))
+        invalidHandle.closeFile()
+        let invalidInstall = try await SpeechModelInstallationSnapshot.scan([probe], cachesDirectory: cache)
+        XCTAssertFalse(invalidInstall.contains(model.id))
+
+        let validHandle = try FileHandle(forWritingTo: modelURL)
+        validHandle.write(Data("GGUF".utf8))
+        validHandle.closeFile()
+        let validInstall = try await SpeechModelInstallationSnapshot.scan([probe], cachesDirectory: cache)
+        XCTAssertTrue(validInstall.contains(model.id))
+    }
+
+    func testMissingRussianCodeSwitchShowsManualInstallationInstructions() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let provider = WhisperProvider(modelDirectory: directory, modelOverride: .whisperRussianCodeSwitch)
+        XCTAssertFalse(provider.shouldClearCacheAfterCancellation)
+
+        do {
+            try await provider.prepare()
+            XCTFail("Missing local GGUF must fail before backend initialization or network download")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains(directory.path))
+            XCTAssertTrue(error.localizedDescription.contains("install_russian_codeswitch_model.sh"))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+        }
+    }
+
     private func waitUntil(_ condition: @escaping @MainActor () async -> Bool) async throws {
         let deadline = Date().addingTimeInterval(2)
         while !(await condition()), Date() < deadline {
