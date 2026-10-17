@@ -1,0 +1,136 @@
+name: Russian Code-Switch Model
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/russian-codeswitch]
+    paths:
+      - .github/workflows/russian-codeswitch-model.yml
+
+permissions:
+  contents: read
+
+jobs:
+  convert:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      MODEL_REPO: coriollon/whisper-large-v3-turbo-russian-codeswitch
+      MODEL_REVISION: bf64d2a976a268e35041f74233f889f951f0f676
+      MODEL_SHA256: 4b1891beb4efbdf22605046229acbc060d873c8fc32f3ec6e2e1c0ac64651056
+      MODEL_BYTES: "3235581408"
+      MODEL_NAME: whisper-large-v3-turbo-russian-codeswitch
+    steps:
+      - name: Free disk space and check capacity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/share/powershell /opt/hostedtoolcache/CodeQL
+          df -h "$RUNNER_TEMP"
+          available_kib="$(df -Pk "$RUNNER_TEMP" | awk 'NR == 2 { print $4 }')"
+          if (( available_kib < 9 * 1024 * 1024 )); then
+            echo "At least 9 GiB of free space is required; found ${available_kib} KiB" >&2
+            exit 1
+          fi
+
+      - name: Check out pinned transcribe.cpp source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: handy-computer/transcribe.cpp
+          ref: 33d5c383e43e6acbd572845866ea75b8c7959fa5 # v0.1.2
+          path: transcribe.cpp
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: Install converter dependencies with CPU-only PyTorch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --no-cache-dir 'torch==2.5.1' \
+            --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --no-cache-dir \
+            'gguf>=0.10' 'huggingface-hub>=0.30' 'librosa>=0.10' \
+            'safetensors>=0.4' 'soundfile>=0.12' 'numpy>=1.26' \
+            'transformers==5.6.1'
+          python - <<'PY'
+          import gguf, numpy, safetensors, torch, transformers
+          print('torch', torch.__version__)
+          print('transformers', transformers.__version__)
+          PY
+
+      - name: Build the v0.1.2 quantizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S transcribe.cpp -B "$RUNNER_TEMP/transcribe-build" \
+            -DCMAKE_BUILD_TYPE=Release -DTRANSCRIBE_BUILD_TOOLS=ON \
+            -DTRANSCRIBE_BUILD_TESTS=OFF -DTRANSCRIBE_BUILD_EXAMPLES=OFF
+          cmake --build "$RUNNER_TEMP/transcribe-build" \
+            --target transcribe-quantize --config Release --parallel 2
+          test -x "$RUNNER_TEMP/transcribe-build/bin/transcribe-quantize"
+
+      - name: Download and verify pinned Hugging Face checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          available_kib="$(df -Pk "$RUNNER_TEMP" | awk 'NR == 2 { print $4 }')"
+          if (( available_kib < 8 * 1024 * 1024 )); then
+            echo "At least 8 GiB of free space is required after setup; found ${available_kib} KiB" >&2
+            exit 1
+          fi
+          model_dir="$RUNNER_TEMP/model"
+          mkdir -p "$model_dir"
+          base_url="https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}"
+          for name in config.json generation_config.json preprocessor_config.json tokenizer.json model.safetensors; do
+            curl --fail --location --silent --show-error \
+              --retry 4 --retry-delay 10 --connect-timeout 30 \
+              "${base_url}/${name}" -o "${model_dir}/${name}"
+          done
+          actual_bytes="$(stat -c '%s' "$model_dir/model.safetensors")"
+          test "$actual_bytes" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" "$model_dir/model.safetensors" | sha256sum --check
+          df -h "$RUNNER_TEMP"
+
+      - name: Convert to GGUF and quantize to Q8_0
+        shell: bash
+        run: |
+          set -euo pipefail
+          model_dir="$RUNNER_TEMP/model"
+          output_dir="$RUNNER_TEMP/output"
+          mkdir -p "$output_dir"
+          f32="$RUNNER_TEMP/${MODEL_NAME}-F32.gguf"
+          q8="$output_dir/${MODEL_NAME}-Q8_0.gguf"
+          python transcribe.cpp/scripts/convert-whisper.py \
+            "$model_dir" "$f32" \
+            --repo-id "$MODEL_REPO" --variant whisper-large-v3-turbo
+          test -s "$f32"
+          "$RUNNER_TEMP/transcribe-build/bin/transcribe-quantize" \
+            "$f32" "$q8" --quant Q8_0
+          test -s "$q8"
+          test "$(head -c 4 "$q8")" = GGUF
+          q8_bytes="$(stat -c '%s' "$q8")"
+          if (( q8_bytes < 700000000 || q8_bytes > 1300000000 )); then
+            echo "Unexpected Q8_0 model size: ${q8_bytes} bytes" >&2
+            exit 1
+          fi
+          (
+            cd "$output_dir"
+            sha256sum "${MODEL_NAME}-Q8_0.gguf" > "${MODEL_NAME}-Q8_0.gguf.sha256"
+            sha256sum --check "${MODEL_NAME}-Q8_0.gguf.sha256"
+          )
+          rm -f "$f32" "$model_dir/model.safetensors"
+          ls -lh "$output_dir"
+
+      - name: Upload GGUF and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: russian-codeswitch-Q8_0-${{ github.run_id }}
+          path: ${{ runner.temp }}/output/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
