@@ -124,6 +124,23 @@ enum PrivateAIModelDownloadProgressText {
 
 typealias PrivateAIModelDownloadProgressHandler = @Sendable (PrivateAIModelDownloadProgress) async -> Void
 
+enum PrivateAIModelUpdateState: String, Sendable, Codable, Equatable {
+    case unavailable
+    case notInstalled
+    case current
+    case updateAvailable
+}
+
+struct PrivateAIModelUpdateStatus: Sendable, Codable, Equatable {
+    var state: PrivateAIModelUpdateState
+    var installedVersion: String?
+    var availableVersion: String?
+}
+
+struct PrivateAIModelUpdateToken: Sendable, Hashable {
+    let id: UUID
+}
+
 struct PrivateAIRegisteredModel: Sendable, Codable, Hashable, Identifiable {
     var id: String { self.artifact.identifier }
     var displayName: String
@@ -136,6 +153,13 @@ struct PrivateAIRegisteredModel: Sendable, Codable, Hashable, Identifiable {
     var canDownload: Bool {
         self.artifact.downloadURL != nil && self.artifact.sha256?.isEmpty == false
     }
+}
+
+enum PrivateAIModelTask: String, Sendable, Codable, Hashable {
+    case meetingSummary
+    case dictation
+    case edit
+    case command
 }
 
 enum PrivateAIRuntimeState: String, Sendable, Codable, Hashable {
@@ -170,7 +194,9 @@ protocol PrivateAIProviderFeatureProviding: Sendable {
     var boostDefaultsKey: String { get }
     var modelDirectoryName: String { get }
 
+    func selectedModelDefaultsKey(for task: PrivateAIModelTask) -> String
     func modelIDs() -> [String]
+    func modelIDs(for task: PrivateAIModelTask) -> [String]
     func model(id: String) -> PrivateAIRegisteredModel?
     func canonicalModelID(for value: String) -> String?
     func isKnownModelID(_ value: String) -> Bool
@@ -179,6 +205,14 @@ protocol PrivateAIProviderFeatureProviding: Sendable {
 }
 
 extension PrivateAIProviderFeatureProviding {
+    func selectedModelDefaultsKey(for _: PrivateAIModelTask) -> String {
+        self.selectedModelDefaultsKey
+    }
+
+    func modelIDs(for task: PrivateAIModelTask) -> [String] {
+        task == .dictation ? self.modelIDs() : []
+    }
+
     func matches(model: String) -> Bool {
         guard self.isAvailable else { return false }
 
@@ -212,24 +246,43 @@ protocol PrivateAIIntegrationProviding: Sendable {
         _ model: PrivateAIRegisteredModel,
         progressHandler: PrivateAIModelDownloadProgressHandler?
     ) async throws -> URL
+    func modelUpdateStatus(_ model: PrivateAIRegisteredModel) async -> PrivateAIModelUpdateStatus
+    func updateModel(
+        _ model: PrivateAIRegisteredModel,
+        progressHandler: PrivateAIModelDownloadProgressHandler?
+    ) async throws -> PrivateAIModelUpdateToken
+    func commitModelUpdate(_ token: PrivateAIModelUpdateToken) async
+    func rollbackModelUpdate(_ token: PrivateAIModelUpdateToken) async
     func shouldHandleDictation(model: String) -> Bool
+    /// True when the model was trained to read the text before the cursor
+    /// and on screen, so dictation only captures them for that model.
+    func readsDictationContext(model: String) -> Bool
     func status(for runtime: PrivateAIIntegrationService.RuntimeConfiguration) async -> PrivateAIStatus
     func loadedModelState() async -> PrivateAIIntegrationService.LoadedModelState?
+    func residencySnapshot() async throws -> MeetingResidentModel?
+    func restoreResidency(_ model: MeetingResidentModel) async throws
     func loadModel(_ model: PrivateAIRegisteredModel) async throws -> PrivateAIStatus
+    func verifyModel(_ model: PrivateAIRegisteredModel) async throws -> PrivateAIStatus
     func prewarmDictation() async
     func unloadCachedRuntime(reason: String) async
     func shutdownForTermination() async
-    func enhanceDictation(
-        _ inputText: String,
-        runtime: PrivateAIIntegrationService.RuntimeConfiguration,
-        context: PrivateAIIntegrationService.AppContext
-    ) async throws -> PrivateAIIntegrationService.EnhancementResult
-    func enhanceDictation(
+    nonisolated func enhanceDictation(
         _ inputText: String,
         runtime: PrivateAIIntegrationService.RuntimeConfiguration,
         context: PrivateAIIntegrationService.AppContext,
+        maxOutputTokens: Int
+    ) async throws -> PrivateAIIntegrationService.EnhancementResult
+    nonisolated func enhanceDictation(
+        _ inputText: String,
+        runtime: PrivateAIIntegrationService.RuntimeConfiguration,
+        context: PrivateAIIntegrationService.AppContext,
+        maxOutputTokens: Int,
         streamHandler: PrivateAIStreamHandler?
     ) async throws -> PrivateAIIntegrationService.EnhancementResult
+    func summarizeMeeting(_ transcript: String, style: String) async throws -> String
+    /// `instructions` replaces the built-in guidance for a custom summary; `thinking` lets the
+    /// model reason before it answers.
+    func summarizeMeeting(_ transcript: String, style: String, instructions: String, thinking: Bool) async throws -> String
     func rewrite(
         _ inputText: String,
         systemPrompt: String,
@@ -239,6 +292,31 @@ protocol PrivateAIIntegrationProviding: Sendable {
 }
 
 extension PrivateAIIntegrationProviding {
+    func summarizeMeeting(_: String, style _: String) async throws -> String {
+        throw PrivateAIUnavailableError()
+    }
+
+    /// A provider that predates these arguments still summarizes the built-in types.
+    func summarizeMeeting(_ transcript: String, style: String, instructions _: String, thinking _: Bool) async throws -> String {
+        try await self.summarizeMeeting(transcript, style: style)
+    }
+
+    func residencySnapshot() async throws -> MeetingResidentModel? {
+        // An older private bridge must not silently lose a loaded model on restoration.
+        if let loaded = await self.loadedModelState(), loaded.state == .ready {
+            throw MeetingModelResidencyError.unsupportedProvider
+        }
+        return nil
+    }
+
+    func restoreResidency(_: MeetingResidentModel) async throws {}
+
+    func readsDictationContext(model _: String) -> Bool { false }
+
+    func verifyModel(_ model: PrivateAIRegisteredModel) async throws -> PrivateAIStatus {
+        try await self.loadModel(model)
+    }
+
     func installedModelURLs(for model: PrivateAIRegisteredModel) -> [URL] {
         guard let path = self.localModelPath(for: model) else { return [] }
         return [URL(fileURLWithPath: path)]
@@ -250,6 +328,20 @@ extension PrivateAIIntegrationProviding {
         try await self.prepareModel(model, progressHandler: nil)
     }
 
+    func modelUpdateStatus(_: PrivateAIRegisteredModel) async -> PrivateAIModelUpdateStatus {
+        PrivateAIModelUpdateStatus(state: .unavailable)
+    }
+
+    func updateModel(
+        _: PrivateAIRegisteredModel,
+        progressHandler _: PrivateAIModelDownloadProgressHandler?
+    ) async throws -> PrivateAIModelUpdateToken {
+        throw PrivateAIUnavailableError()
+    }
+
+    func commitModelUpdate(_: PrivateAIModelUpdateToken) async {}
+    func rollbackModelUpdate(_: PrivateAIModelUpdateToken) async {}
+
     /// Best-effort, no-op by default. Backends that support prefix priming
     /// (the local FluidIntelligence bridge) override this to load and prime the
     /// dictation runtime ahead of the first request.
@@ -259,13 +351,19 @@ extension PrivateAIIntegrationProviding {
         await self.unloadCachedRuntime(reason: "termination")
     }
 
-    func enhanceDictation(
+    nonisolated func enhanceDictation(
         _ inputText: String,
         runtime: PrivateAIIntegrationService.RuntimeConfiguration,
         context: PrivateAIIntegrationService.AppContext,
+        maxOutputTokens: Int,
         streamHandler _: PrivateAIStreamHandler?
     ) async throws -> PrivateAIIntegrationService.EnhancementResult {
-        try await self.enhanceDictation(inputText, runtime: runtime, context: context)
+        try await self.enhanceDictation(
+            inputText,
+            runtime: runtime,
+            context: context,
+            maxOutputTokens: maxOutputTokens
+        )
     }
 
     func rewrite(
@@ -307,9 +405,14 @@ enum PrivateAIProviderFeature {
     }
 
     nonisolated static func verificationFingerprint(for modelID: String) -> String {
-        let backendPreference = UserDefaults.standard.string(forKey: SettingsStore.privateAIBackendPreferenceDefaultsKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
+        self.verificationFingerprint(
+            for: modelID,
+            backendPreference: UserDefaults.standard.string(forKey: SettingsStore.privateAIBackendPreferenceDefaultsKey)
+        )
+    }
+
+    nonisolated static func verificationFingerprint(for modelID: String, backendPreference: String?) -> String {
+        let backendPreference = backendPreference?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let normalizedBackendPreference: String
         if let backendPreference,
            !backendPreference.isEmpty,
@@ -354,6 +457,10 @@ enum PrivateAIModelRegistry {
 
     nonisolated static func modelIDs(includeDisabled _: Bool = false) -> [String] {
         PrivateAIProviderFeature.shared.modelIDs()
+    }
+
+    nonisolated static func modelIDs(for task: PrivateAIModelTask) -> [String] {
+        PrivateAIProviderFeature.shared.modelIDs(for: task)
     }
 
     nonisolated static func localModelURL(for model: PrivateAIRegisteredModel, directoryURL: URL) -> URL {
@@ -446,15 +553,37 @@ private struct UnavailablePrivateAIIntegrationProvider: PrivateAIIntegrationProv
 
     func unloadCachedRuntime(reason _: String) async {}
 
-    func enhanceDictation(
+    nonisolated func enhanceDictation(
         _ inputText: String,
         runtime _: PrivateAIIntegrationService.RuntimeConfiguration,
-        context _: PrivateAIIntegrationService.AppContext
+        context _: PrivateAIIntegrationService.AppContext,
+        maxOutputTokens _: Int
     ) async throws -> PrivateAIIntegrationService.EnhancementResult {
         PrivateAIIntegrationService.EnhancementResult(
             outputText: inputText,
             backendKind: nil,
             latencyMilliseconds: nil
         )
+    }
+}
+
+/// Value-only residency evidence. A late completion from a retired runtime cannot mark its
+/// replacement loaded, and a configured client is never mistaken for a loaded model.
+nonisolated struct PrivateAIConfirmedResidency: Sendable {
+    private(set) var generation = UUID()
+    private(set) var isResident = false
+
+    mutating func reset() {
+        self.generation = UUID()
+        self.isResident = false
+    }
+
+    mutating func confirm(generation: UUID) {
+        self.observe(isResident: true, generation: generation)
+    }
+
+    mutating func observe(isResident: Bool, generation: UUID) {
+        guard generation == self.generation else { return }
+        self.isResident = isResident
     }
 }

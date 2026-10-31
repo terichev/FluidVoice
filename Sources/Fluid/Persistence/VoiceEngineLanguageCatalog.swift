@@ -48,7 +48,7 @@ struct VoiceEngineLanguageRoute: Identifiable, Equatable {
 
     var badgeText: String? {
         switch self.model {
-        case .parakeetTDT, .parakeetTDTv2:
+        case .parakeetTDT, .parakeetTDTv2, .fluidParakeetMini, .fluidParakeetPico, .fluidParakeetPro:
             return "Optimized for FluidVoice"
         default:
             return nil
@@ -150,6 +150,12 @@ enum VoiceEngineLanguageCatalog {
             routes.append(Self.route(language, .parakeetTDT, .automatic))
         }
 
+        if language.id == "en" {
+            routes.append(Self.route(language, .fluidParakeetMini, .automatic))
+            routes.append(Self.route(language, .fluidParakeetPico, .automatic))
+            routes.append(Self.route(language, .fluidParakeetPro, .automatic))
+        }
+
         if language.id == "ru" {
             routes.append(Self.route(language, .gigaamV3, .automatic))
         }
@@ -227,33 +233,7 @@ enum VoiceEngineLanguageCatalog {
         "ar",
     ]
 
-    private static let parakeetV3LanguageIDs: Set<String> = [
-        "bg",
-        "hr",
-        "cs",
-        "da",
-        "nl",
-        "en",
-        "et",
-        "fi",
-        "fr",
-        "de",
-        "el",
-        "hu",
-        "it",
-        "lv",
-        "lt",
-        "mt",
-        "pl",
-        "pt",
-        "ro",
-        "sk",
-        "sl",
-        "es",
-        "sv",
-        "ru",
-        "uk",
-    ]
+    nonisolated static let parakeetV3LanguageIDs = Set(ParakeetSpeechModelCatalog.v3.supportedLanguageCodes)
 
     private static let cohereLanguageMap: [String: SettingsStore.CohereLanguage] = [
         "ar": .arabic,

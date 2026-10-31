@@ -82,6 +82,12 @@ final class RewriteModeService: ObservableObject {
     }
 
     func processRewriteRequest(_ prompt: String) async {
+        guard let summaryActivity = MeetingSummaryActivityCoordinator.shared.beginProcessing() else {
+            MeetingSummaryActivityCoordinator.presentBusyError()
+            return
+        }
+        defer { MeetingSummaryActivityCoordinator.shared.endProcessing(summaryActivity) }
+
         let startTime = Date()
         AnalyticsService.shared.recordUsage(
             mode: .edit,
@@ -146,10 +152,29 @@ final class RewriteModeService: ObservableObject {
         }
     }
 
-    func acceptRewrite() {
-        guard !self.rewrittenText.isEmpty else { return }
-        NSApp.hide(nil) // Restore focus to the previous app
-        self.typingService.typeTextInstantly(self.rewrittenText)
+    @MainActor
+    func acceptRewrite(_ text: String) async {
+        guard let summaryActivity = MeetingSummaryActivityCoordinator.shared.beginProcessing() else {
+            MeetingSummaryActivityCoordinator.presentBusyError()
+            return
+        }
+        defer { MeetingSummaryActivityCoordinator.shared.endProcessing(summaryActivity) }
+
+        // The panel may clear its state before this queued action starts.
+        guard !text.isEmpty else { return }
+        NSApp.hide(nil)
+        // Hiding alone races the paste: the focused element can still be our
+        // panel when the editability check runs. Put focus back on the field
+        // the rewrite was recorded from, and fall back to a short settle.
+        var targetPID: pid_t?
+        if let context = NotchContentState.shared.recordingTargetContext {
+            let preparation = await TypingService.prepareTargetForDelivery(context)
+            targetPID = context.pid
+            self.appendDiagnosticLog("acceptRewrite focus=\(preparation.rawValue) pid=\(context.pid)")
+        } else {
+            try? await Task.sleep(nanoseconds: 80_000_000)
+        }
+        _ = await self.typingService.typeTextInstantly(text, preferredTargetPID: targetPID)
     }
 
     func clearState() {
@@ -185,12 +210,7 @@ final class RewriteModeService: ObservableObject {
         let builtInDefaultPrompt = SettingsStore.defaultSystemPromptText(for: promptMode)
         let systemPromptBeforeContext = settings.effectiveSystemPrompt(for: promptMode, appBundleID: appBundleID)
         // Use global provider/model when linked, otherwise use Edit Mode's independent settings.
-        let providerID: String = {
-            if settings.rewriteModeLinkedToGlobal {
-                return settings.selectedProviderID
-            }
-            return settings.rewriteModeSelectedProviderID
-        }()
+        let providerID = settings.effectiveRewriteModeProviderID
         guard !providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NSError(
                 domain: "RewriteMode",
@@ -235,25 +255,7 @@ final class RewriteModeService: ObservableObject {
             self.logPromptTrace("Conversation input (Q/history)", value: messageDump.isEmpty ? "<empty>" : messageDump)
         }
 
-        let model: String = {
-            if settings.rewriteModeLinkedToGlobal {
-                let key: String
-                if ModelRepository.shared.isBuiltIn(providerID) {
-                    key = providerID
-                } else if providerID.hasPrefix("custom:") {
-                    key = providerID
-                } else {
-                    key = "custom:\(providerID)"
-                }
-                return settings.selectedModelByProvider[key]
-                    ?? settings.selectedModel
-                    ?? ModelRepository.shared.defaultModels(for: providerID).first
-                    ?? ""
-            }
-            return settings.rewriteModeSelectedModel
-                ?? ModelRepository.shared.defaultModels(for: providerID).first
-                ?? ""
-        }()
+        let model = settings.effectiveRewriteModeSelectedModel
         guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NSError(
                 domain: "RewriteMode",
@@ -337,7 +339,7 @@ final class RewriteModeService: ObservableObject {
 
         // Reasoning models (o1, o3, gpt-5) don't support temperature parameter at all
         let isReasoningModel = settings.isReasoningModel(model)
-        let isTemperatureUnsupported = settings.isTemperatureUnsupported(model)
+        let isTemperatureUnsupported = settings.isTemperatureUnsupported(model, baseURL: baseURL)
 
         // Get reasoning config for this model (e.g., reasoning_effort, enable_thinking)
         let reasoningConfig = settings.getReasoningConfig(forModel: model, provider: providerID)
@@ -426,9 +428,7 @@ final class RewriteModeService: ObservableObject {
 
     private func appendDiagnosticLog(_ message: String) {
         guard self.diagnosticsEnabled || self.forcePromptTraceToConsole else { return }
-        let line = "[RewriteModeService] \(message)"
-        FileLogger.shared.append(line: line)
-        DebugLogger.shared.debug(line, source: "RewriteModeService")
+        DebugLogger.shared.info(message, source: "RewriteModeService")
     }
 
     private func providerKey(for providerID: String) -> String {
