@@ -364,7 +364,7 @@ enum SettingsSearchIndex {
         ),
 
         .init(target: .spokenFormatting, title: "Spoken Formatting", terms: ["punctuation start word symbols new line paragraph"]),
-        .init(target: .fillerWords, title: "Remove Filler Words", terms: ["um uh er filler sounds cleanup"]),
+        .init(target: .fillerWords, title: "Remove Filler Words", terms: ["um uh er ну вот типа как бы какие-то ещё слова паразиты filler sounds cleanup"]),
         .init(target: .notifications, title: "Notifications", terms: ["alerts warnings"]),
         .init(
             target: .aiEnhancementFailures,

@@ -83,6 +83,8 @@ git fetch upstream && git merge upstream/main && git push
 brew upgrade gigastt        # модели в ~/.gigastt/models обновляются сами при необходимости
 ```
 
+Проверено 31 октября 2026: движок **2.22.0** (было 2.18.0). Сама модель Сбера по-прежнему GigaAM v3, отдельной v4 нет. `gigastt download --model-variant e2e_rnnt` оставляет уже скачанный INT8-бандл `e2e_rnnt`, если он совпадает с текущим. `GET /health` по-прежнему отдаёт `"model": "gigaam-v3-e2e-rnnt"`, когда сервер готов. С 2.22 поле `model` в `POST /v1/audio/transcriptions` сервер принимает и игнорирует: вариант задаётся флагом `gigastt serve --model-variant e2e_rnnt`, приложение так и запускает его.
+
 ### Долгосрочный вариант
 
 Открыть PR с GigaAM в апстрим [altic-dev/FluidVoice](https://github.com/altic-dev/FluidVoice). Если примут — модель попадёт в официальные релизы, можно вернуться на обычный FluidVoice с автообновлениями, и вся эта ручная схема станет не нужна.

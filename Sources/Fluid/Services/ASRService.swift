@@ -7467,18 +7467,56 @@ final class ASRService: ObservableObject {
         return outcome
     }
 
-    /// Removes filler sounds from transcribed text
+    /// Removes filler sounds and discourse phrases from transcribed text.
     static func removeFillerWords(_ text: String) -> String {
         guard SettingsStore.shared.removeFillerWordsEnabled else { return text }
+        return self.removingFillers(from: text, fillers: SettingsStore.shared.fillerWords)
+    }
 
-        let fillers = Set(SettingsStore.shared.fillerWords.map { $0.lowercased() })
+    /// Case-insensitive filler match key. Folds ё/е and ignores punctuation glued to a word.
+    static func normalizeFillerToken(_ token: String) -> String {
+        token.lowercased()
+            .replacingOccurrences(of: "ё", with: "е")
+            .trimmingCharacters(in: .punctuationCharacters)
+    }
 
-        let words = text.split(separator: " ", omittingEmptySubsequences: true)
-        let filtered = words.filter { word in
-            !fillers.contains(word.lowercased().trimmingCharacters(in: .punctuationCharacters))
+    /// Drops configured filler words and multi-word phrases. Longer phrases win, so
+    /// "вот эти вот" is removed as a phrase before the single word "вот".
+    static func removingFillers(from text: String, fillers: [String]) -> String {
+        let phrases: [[String]] = fillers.compactMap { phrase in
+            let parts = phrase
+                .split(whereSeparator: \.isWhitespace)
+                .map { self.normalizeFillerToken(String($0)) }
+                .filter { !$0.isEmpty }
+            return parts.isEmpty ? nil : parts
+        }
+        .sorted { lhs, rhs in
+            if lhs.count != rhs.count { return lhs.count > rhs.count }
+            return lhs.joined().count > rhs.joined().count
         }
 
-        return filtered.joined(separator: " ")
+        let tokens = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        var index = 0
+        var kept: [String] = []
+        while index < tokens.count {
+            var matchedLength = 0
+            for phrase in phrases where index + phrase.count <= tokens.count {
+                let matches = phrase.enumerated().allSatisfy { offset, part in
+                    self.normalizeFillerToken(tokens[index + offset]) == part
+                }
+                if matches {
+                    matchedLength = phrase.count
+                    break
+                }
+            }
+            if matchedLength > 0 {
+                index += matchedLength
+            } else {
+                kept.append(tokens[index])
+                index += 1
+            }
+        }
+        return kept.joined(separator: " ")
     }
 
     // MARK: - Custom Dictionary (Cached Regex)

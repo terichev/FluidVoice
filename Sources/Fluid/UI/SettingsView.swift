@@ -977,7 +977,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             self.settingsToggleRow(
                                 title: "Remove Filler Words",
-                                description: "Remove filler sounds like ‘um’, ‘uh’, and ‘er’ from transcriptions.",
+                                description: "Remove filler sounds like ‘um’, ‘uh’, ‘ну’, ‘вот’, ‘как бы’, and ‘какие-то’.",
                                 isOn: Binding(
                                     get: { self.settings.removeFillerWordsEnabled },
                                     set: { self.settings.removeFillerWordsEnabled = $0 }

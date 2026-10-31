@@ -62,6 +62,7 @@ final class SettingsStore: ObservableObject {
         self.repairForcedOnboardingResetIfNeeded()
         self.migrateOverlayBottomOffsetTo50IfNeeded()
         self.migratePrivateAIContextDefaultTo4KIfNeeded()
+        self.migrateFillerWordCatalogIfNeeded()
         Self.migrateTextInsertionModeToReliablePasteIfNeeded(defaults: self.defaults)
         self.refreshLaunchAtStartupStatus(clearError: true, logMismatch: false)
     }
@@ -4644,7 +4645,10 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - Filler Words
 
-    static let defaultFillerWords = [
+    /// Bumped when new default fillers should be merged into a list the user already saved.
+    static let fillerWordCatalogVersion = 2
+
+    static let englishFillerWords = [
         "um",
         "uh",
         "er",
@@ -4663,6 +4667,74 @@ final class SettingsStore: ObservableObject {
         "urm",
         "ugh",
     ]
+
+    /// Russian hesitation sounds and discourse fillers. Single words and short phrases.
+    /// "вот", "эти", "какие-то", and "ещё" are included because they show up as parasites
+    /// in dictated Russian; the list stays editable in Dictation Formatting.
+    static let russianFillerWords = [
+        "э",
+        "ээ",
+        "эээ",
+        "э-э",
+        "эм",
+        "эмм",
+        "мм",
+        "ммм",
+        "аа",
+        "ааа",
+        "ну",
+        "вот",
+        "типа",
+        "короче",
+        "эти",
+        "ещё",
+        "какие-то",
+        "какой-то",
+        "какая-то",
+        "какое-то",
+        "каких-то",
+        "как бы",
+        "в общем",
+        "в общем-то",
+        "то есть",
+        "так сказать",
+        "это самое",
+        "ну вот",
+        "ну типа",
+        "вот это вот",
+        "вот эти вот",
+        "так вот",
+        "короче говоря",
+        "в принципе",
+    ]
+
+    static let defaultFillerWords = englishFillerWords + russianFillerWords
+
+    /// Adds newly shipped fillers to a list that was already saved, without putting back
+    /// English fillers the user had removed.
+    private func migrateFillerWordCatalogIfNeeded() {
+        let storedVersion = self.defaults.integer(forKey: Keys.fillerWordCatalogVersion)
+        guard storedVersion < Self.fillerWordCatalogVersion else { return }
+
+        if let stored = self.defaults.array(forKey: Keys.fillerWords) as? [String] {
+            let existing = Set(stored.map { Self.fillerCatalogKey($0) })
+            var merged = stored
+            for word in Self.russianFillerWords where !existing.contains(Self.fillerCatalogKey(word)) {
+                merged.append(word)
+            }
+            if merged != stored {
+                self.defaults.set(merged, forKey: Keys.fillerWords)
+            }
+        }
+
+        self.defaults.set(Self.fillerWordCatalogVersion, forKey: Keys.fillerWordCatalogVersion)
+    }
+
+    private static func fillerCatalogKey(_ token: String) -> String {
+        token.lowercased()
+            .replacingOccurrences(of: "ё", with: "е")
+            .trimmingCharacters(in: .punctuationCharacters)
+    }
 
     var fillerWords: [String] {
         get {
@@ -6085,6 +6157,7 @@ private extension SettingsStore {
 
         // Filler Words
         static let fillerWords = "FillerWords"
+        static let fillerWordCatalogVersion = "FillerWordCatalogVersion"
         static let removeFillerWordsEnabled = "RemoveFillerWordsEnabled"
         static let autoConvertPunctuationEnabled = "AutoConvertPunctuationEnabled"
         static let literalDictationFormattingEnabled = "LiteralDictationFormattingEnabled"
